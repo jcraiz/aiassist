@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente Virtual - Prueba</title>
+    <style>
+        .chat-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .chat-messages {
+            height: 400px;
+            border: 1px solid #ccc;
+            padding: 15px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+        .user-message {
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 10px;
+            text-align: right;
+        }
+        .bot-message {
+            background: #e9ecef;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 10px;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h2>🤖 Asistente Virtual para Idiomas</h2>
+        <div id="chatMessages" class="chat-messages">
+            <div class="bot-message">¡Hola! Soy tu asistente virtual. Puedes preguntarme sobre gramática, vocabulario, traducciones y más. ¿En qué puedo ayudarte?</div>
+        </div>
+        <div class="input-container">
+            <input type="text" id="userInput" placeholder="Escribe tu pregunta aquí..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Enviar</button>
+            <button onclick="toggleVoice()" id="voiceBtn">🎤 Activar Voz</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración - CAMBIAR ESTOS VALORES
+        const HUGGINGFACE_TOKEN = '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'; // Pega aquí tu token
+        const MODEL_URL = 'https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium';
+        
+        let voiceEnabled = false;
+        let selectedVoice = 'es-ES-ElviraNeural'; // Voz en español
+
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const chatMessages = document.getElementById('chatMessages');
+            const message = userInput.value.trim();
+            
+            if (!message) return;
+
+            // Mostrar mensaje del usuario
+            chatMessages.innerHTML += `<div class="user-message">${message}</div>`;
+            userInput.value = '';
+
+            try {
+                // Llamar a Hugging Face
+                const response = await callHuggingFace(message);
+                
+                // Mostrar respuesta del bot
+                chatMessages.innerHTML += `<div class="bot-message">${response}</div>`;
+                
+                // Reproducir con voz si está activada
+                if (voiceEnabled) {
+                    speakText(response);
+                }
+                
+                // Scroll automático
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+            } catch (error) {
+                chatMessages.innerHTML += `<div class="bot-message">Lo siento, hubo un error. Por favor, inténtalo de nuevo.</div>`;
+                console.error('Error:', error);
+            }
+        }
+
+        async function callHuggingFace(message) {
+            // Contexto específico para enseñanza de idiomas
+            const prompt = `Eres un asistente virtual especializado en enseñar idiomas. Responde de manera clara, educativa y amigable. Estudiante pregunta: ${message}`;
+            
+            const response = await fetch(MODEL_URL, {
+                headers: {
+                    'Authorization': `Bearer ${HUGGINGFACE_TOKEN}`,
+                    'Content-Type': 'application/json',
+                },
+                method: 'POST',
+                body: JSON.stringify({
+                    inputs: prompt,
+                    parameters: {
+                        max_length: 150,
+                        temperature: 0.7,
+                        return_full_text: false
+                    }
+                }),
+            });
+
+            const result = await response.json();
+            return result[0]?.generated_text || 'Lo siento, no pude generar una respuesta adecuada.';
+        }
+
+        function toggleVoice() {
+            voiceEnabled = !voiceEnabled;
+            const btn = document.getElementById('voiceBtn');
+            btn.textContent = voiceEnabled ? '🔇 Desactivar Voz' : '🎤 Activar Voz';
+            btn.style.background = voiceEnabled ? '#dc3545' : '#007bff';
+        }
+
+        // Función para síntesis de voz usando Edge TTS
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                // Cancelar cualquier síntesis anterior
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                
+                // Buscar voz en español
+                const voices = speechSynthesis.getVoices();
+                const spanishVoice = voices.find(voice => 
+                    voice.lang.includes('es') || voice.name.includes('Spanish')
+                );
+                
+                if (spanishVoice) {
+                    utterance.voice = spanishVoice;
+                }
+                
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        // Cargar voces disponibles
+        speechSynthesis.onvoiceschanged = function() {
+            console.log('Voces disponibles:', speechSynthesis.getVoices());
+        };
+    </script>
+</body>
+</html>
